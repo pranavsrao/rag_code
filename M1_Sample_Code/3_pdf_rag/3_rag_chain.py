@@ -9,7 +9,7 @@
 # COMMAND ----------
 
 # Before logging this chain using the driver notebook, you need to comment out this line.
-dbutils.library.restartPython() 
+# dbutils.library.restartPython() 
 
 # COMMAND ----------
 
@@ -128,20 +128,24 @@ chain = (
 ############
 # Test the Chain
 ############
-model_input_sample = {
-    "messages": [
-        {
-            "role": "user",
-            "content": "What is ARES?",
-        }
-    ]
-}
-print(chain.invoke(model_input_sample))
+# model_input_sample = {
+#     "messages": [
+#         {
+#             "role": "user",
+#             "content": "What is the purpose of SCE's rate case application?",
+#         }
+#     ]
+# }
+# print(chain.invoke(model_input_sample))
 
 ############
 # Tell RAG Studio about the chain - required for logging, but not local testing of this chain
 ############
 rag.set_chain(chain)
+
+# COMMAND ----------
+
+help(StrOutputParser)
 
 # COMMAND ----------
 
