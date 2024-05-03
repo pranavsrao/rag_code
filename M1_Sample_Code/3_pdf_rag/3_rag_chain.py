@@ -8,6 +8,10 @@
 
 # COMMAND ----------
 
+
+
+# COMMAND ----------
+
 # Before logging this chain using the driver notebook, you need to comment out this line.
 # dbutils.library.restartPython() 
 
@@ -187,3 +191,15 @@ help(StrOutputParser)
 # # To use the HTML string in a context that renders HTML, 
 # # such as a web application or a notebook cell that supports HTML output
 # displayHTML(pretty_json_html)
+
+# COMMAND ----------
+
+# Import the necessary libraries
+import pandas as pd
+from unity.catalog import development
+
+# Import the rate_case_eval_set_eval_metrics from unity catalog
+rate_case_eval_set_eval_metrics = development.rag_studio.rate_case_eval_set_eval_metrics
+
+# Convert rate_case_eval_set_eval_metrics into a pandas dataframe
+df = pd.DataFrame.from_records(rate_case_eval_set_eval_metrics)

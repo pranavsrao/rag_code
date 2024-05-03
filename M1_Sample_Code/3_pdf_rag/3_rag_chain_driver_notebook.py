@@ -164,7 +164,7 @@ displayHTML(pretty_json_html)
 # COMMAND ----------
 
 
-mlflow.langchain.autolog()
+#mlflow.langchain.autolog()
 ############
 # Test the model locally
 # This is the same input that the REST API will accept once deployed.
@@ -448,12 +448,16 @@ print(config_yml)
 
 # COMMAND ----------
 
+help(rag_eval.evaluate)
+
+# COMMAND ----------
+
 # DBTITLE 1,Machine Learning Experiment Tracker
 ############
 # Run evaluation, logging the results to a sub-run of the chain's MLflow run
 ############
 with mlflow.start_run(logged_chain_info.run_id):
-  evaluation_results = rag_eval.evaluate(eval_set_table_name=eval_table_fqdn, model_uri=logged_chain_info.model_uri, config=config_yml)
+  evaluation_results = rag_eval.evaluate(eval_set_table_name=eval_table_fqdn, model_uri=logged_chain_info.model_uri, config=config_custom_judge_yml)
 
 ############
 # Experimental: Log evaluation results to MLflow.  Note you can also use the dashboard produced by RAG Studio to view metrics/debug quality - it has more advanced functionality.
