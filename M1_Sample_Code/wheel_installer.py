@@ -1,20 +1,25 @@
 # Databricks notebook source
-# MAGIC %pip install "https://ml-team-public-read.s3.us-west-2.amazonaws.com/wheels/databricks-rag-studio/679d2f69-6d26-4340-b301-319a955c3ebd/databricks_rag_studio-0.0.0a2-py3-none-any.whl"
+# MAGIC %md ### Install wheel files required for using RAG Studio:
+
+# COMMAND ----------
+
+# DBTITLE 1,Fetch Secrets
+rag_studio        = dbutils.secrets.get("kv-llmops-framework", "rag-studio-wheel-link")
+rag_eval          = dbutils.secrets.get("kv-llmops-framework", "rag-eval-wheel-link")
+mlflow_whl        = dbutils.secrets.get("kv-llmops-framework", "mlflow-wheel")
+mlflow_skinny_whl = dbutils.secrets.get("kv-llmops-framework", "mlflow-skinny-wheel")
+
+# COMMAND ----------
+
+# DBTITLE 1,Install RAG Studio Wheels
+# MAGIC %pip install $rag_studio
+# MAGIC %pip install $rag_eval
+
+# COMMAND ----------
+
+# DBTITLE 1,Install External Dependencies and Update Mlflow
+# MAGIC %pip install opentelemetry-api opentelemetry-sdk langchain -U -q
+# MAGIC %pip uninstall mlflow mlflow-skinny -y # uninstall existing mlflow to avoid installation issues
 # MAGIC
-# MAGIC %pip install "https://ml-team-public-read.s3.us-west-2.amazonaws.com/wheels/rag-eval/releases/databricks_rag_eval-0.0.0a2-py3-none-any.whl"
-
-# COMMAND ----------
-
-# External dependencies
-%pip install opentelemetry-api opentelemetry-sdk langchain -U -q
-%pip uninstall mlflow mlflow-skinny -y # uninstall existing mlflow to avoid installation issues
-
-%pip install "https://mlflow-snapshots.s3-us-west-2.amazonaws.com/mlflow-2.11.3-0.fd95310a50de7df2-py3-none-any.whl" -U
-
-# COMMAND ----------
-
-# MAGIC %pip install "https://mlflow-snapshots.s3-us-west-2.amazonaws.com/mlflow_skinny-2.11.3-0.fd95310a50de7df2-py3-none-any.whl" -U
-
-# COMMAND ----------
-
-# MAGIC %pip install "https://mlflow-snapshots.s3-us-west-2.amazonaws.com/mlflow_skinny-2.11.3-0.fd95310a50de7df2-py3-none-any.whl" -U
+# MAGIC %pip install $mlflow_whl -U
+# MAGIC %pip install $mlflow_skinny_whl -U
