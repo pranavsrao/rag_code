@@ -1,6 +1,7 @@
 # Databricks notebook source
 # MAGIC %sql
-# MAGIC use catalog development
+# MAGIC use catalog development;
+# MAGIC use database `rag_studio`;
 
 # COMMAND ----------
 
@@ -9,7 +10,7 @@ import numpy as np
 
 # COMMAND ----------
 
-df = spark.table('development.rag_studio.rate_case_eval_set_assessments')
+df = spark.table('development.rag_studio.eval_dataset_test_assessments')
 display(df)
 
 # COMMAND ----------
@@ -42,8 +43,8 @@ fixed_factual_accuracy_scores
 
 # COMMAND ----------
 
-df1 = pdf[pdf['app_version'] == '1b']
-df2 = pdf[pdf['app_version'] == '2b']
+df1 = pdf[pdf['app_version'] == 'no_shot']
+df2 = pdf[pdf['app_version'] == 'few_shot']
 dfs = [df1, df2]
 
 for i in dfs:
@@ -95,7 +96,3 @@ summary = pd.DataFrame(
 )
 
 summary
-
-# COMMAND ----------
-
-
