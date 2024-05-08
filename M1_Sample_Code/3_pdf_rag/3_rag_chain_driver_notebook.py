@@ -25,6 +25,11 @@
 
 # COMMAND ----------
 
+# MAGIC %pip install spacy
+# MAGIC %pip install textstat
+
+# COMMAND ----------
+
 dbutils.library.restartPython() 
 
 # COMMAND ----------
@@ -70,11 +75,11 @@ def parse_deployment_info(deployment_info):
 
 # DBTITLE 1,Setup
 # Specify the full path to the chain notebook & config YAML
+chain_config_file   = "3_rag_chain_config.yaml"
 chain_notebook_file = "3_rag_chain"
-chain_config_file = "3_rag_chain_config.yaml"
 
 chain_notebook_path = os.path.join(os.getcwd(), chain_notebook_file)
-chain_config_path = os.path.join(os.getcwd(), chain_config_file)
+chain_config_path   = os.path.join(os.getcwd(), chain_config_file)
 
 print(f"Chain notebook path: {chain_notebook_path}")
 print(f"Chain config path: {chain_config_path}")
@@ -120,7 +125,6 @@ print(f"Model URI: {logged_chain_info.model_uri}")
 # COMMAND ----------
 
 # DBTITLE 1,Local Model Testing and Tracing
-
 mlflow.langchain.autolog()
 ############
 # Test the model locally
@@ -131,7 +135,7 @@ model_input = {
     "messages": [
         {
             "role": "user",
-            "content": "Hello world!!",
+            "content": "Where does SCE operate?",
         },
         
     ]
@@ -140,8 +144,9 @@ model_input = {
 loaded_model = mlflow.langchain.load_model(logged_chain_info.model_uri)
 
 # Run the model to see the output
-# loaded_model.invoke(question)
+loaded_model.invoke(model_input)
 
+# COMMAND ----------
 
 ############
 # Experimental: View the trace
@@ -160,53 +165,6 @@ pretty_json_html = f"<html><body><pre><code>{escaped_json_string}</code></pre></
 # To use the HTML string in a context that renders HTML, 
 # such as a web application or a notebook cell that supports HTML output
 displayHTML(pretty_json_html)
-
-# COMMAND ----------
-
-
-#mlflow.langchain.autolog()
-############
-# Test the model locally
-# This is the same input that the REST API will accept once deployed.
-############
-
-model_input = {
-    "messages": [
-        {
-            "role": "user",
-            "content": "What does SCE stand for?",
-        },
-        
-    ]
-}
-
-loaded_model = mlflow.langchain.load_model(logged_chain_info.model_uri)
-
-# Run the model to see the output
-# loaded_model.invoke(question)
-
-
-############
-# Experimental: View the trace
-# ⚠️⚠️ 🐛🐛 Experimental features likely have bugs! 🐛🐛 ⚠️⚠️
-############
-json_trace = experimental_get_json_trace(loaded_model, model_input)
-
-json_string = json.dumps(json_trace, indent=4)
-
-# Escape HTML characters to avoid XSS or rendering issues
-escaped_json_string = html.escape(json_string)
-
-# Generate HTML with the escaped JSON inside <pre> and <code> tags
-pretty_json_html = f"<html><body><pre><code>{escaped_json_string}</code></pre></body></html>"
-
-# To use the HTML string in a context that renders HTML, 
-# such as a web application or a notebook cell that supports HTML output
-displayHTML(pretty_json_html)
-
-# COMMAND ----------
-
-
 
 # COMMAND ----------
 
@@ -257,7 +215,14 @@ ground_truth_example = {
         "expected_response": expected_response,
     }
 
-ground_truth_example
+escaped_json_string = html.escape(json.dumps(ground_truth_example, indent=4))
+
+# Generate HTML with the escaped JSON inside <pre> and <code> tags
+pretty_json_html = f"<html><body><pre><code>{escaped_json_string}</code></pre></body></html>"
+
+# To use the HTML string in a context that renders HTML, 
+# such as a web application or a notebook cell that supports HTML output
+displayHTML(pretty_json_html)
 
 # COMMAND ----------
 
@@ -327,19 +292,21 @@ eval_dataset = [
     },    
 ]
 
+# COMMAND ----------
+
 ############
 # Turn the eval dataset into a Delta Table
 ############
 # TODO: Change these values to your catalog and schema
-uc_catalog = "development"
-uc_schema = "rag_studio"
+uc_catalog      = "development"
+uc_schema       = "rag_studio"
 eval_table_name = "rate_case_eval_set"
 eval_table_fqdn = f"{uc_catalog}.{uc_schema}.{eval_table_name}"
 
-df = spark.read.json(spark.sparkContext.parallelize(eval_dataset))
-df.write.format("delta").option("mergeSchema", "true").mode("overwrite").saveAsTable(
-    eval_table_fqdn
-)
+# df = spark.read.json(spark.sparkContext.parallelize(eval_dataset))
+# df.write.format("delta").option("mergeSchema", "true").mode("overwrite").saveAsTable(
+#     eval_table_fqdn
+# )
 print(f"Eval set written to: {eval_table_fqdn}")
 
 # COMMAND ----------
@@ -448,16 +415,12 @@ print(config_yml)
 
 # COMMAND ----------
 
-help(rag_eval.evaluate)
-
-# COMMAND ----------
-
 # DBTITLE 1,Machine Learning Experiment Tracker
 ############
 # Run evaluation, logging the results to a sub-run of the chain's MLflow run
 ############
 with mlflow.start_run(logged_chain_info.run_id):
-  evaluation_results = rag_eval.evaluate(eval_set_table_name=eval_table_fqdn, model_uri=logged_chain_info.model_uri, config=config_custom_judge_yml)
+  evaluation_results = rag_eval.evaluate(eval_set_table_name=eval_table_fqdn, model_uri=logged_chain_info.model_uri, config=config_yml)
 
 ############
 # Experimental: Log evaluation results to MLflow.  Note you can also use the dashboard produced by RAG Studio to view metrics/debug quality - it has more advanced functionality.
@@ -482,9 +445,9 @@ RagConfig(chain_config_path).experimental_log_to_mlflow_run(run_id=evaluation_re
 
 # DBTITLE 1,Deploy the model
 # TODO: Change these values to your catalog and schema
-uc_catalog = "development"
-uc_schema = "rag_studio"
-model_name = "rate_case_2"
+uc_catalog    = "development"
+uc_schema     = "rag_studio"
+model_name    = "rate_case_2"
 uc_model_fqdn = f"{uc_catalog}.{uc_schema}.{model_name}" 
 
 uc_registered_chain_info = mlflow.register_model(logged_chain_info.model_uri, uc_model_fqdn)
@@ -503,25 +466,7 @@ uc_registered_chain_info = mlflow.register_model(logged_chain_info.model_uri, uc
 
 deployment_info = rag_studio.deploy_model(uc_model_fqdn, uc_registered_chain_info.version)
 print(parse_deployment_info(deployment_info))
-
 # Note: It can take up to 15 minutes to deploy - we are working to reduce this time to seconds.
-
-# COMMAND ----------
-
-print(inspect.getsource(rag_studio.deploy_model))
-
-# COMMAND ----------
-
-print(inspect.getsource(rag_studio))
-
-# COMMAND ----------
-
-print(inspect.getsource(databricks.rag_studio.client.rest_client.deploy_chain))
-
-# COMMAND ----------
-
-import databricks
-print(inspect.getsource(databricks.rag_studio.sdk))
 
 # COMMAND ----------
 
@@ -545,4 +490,22 @@ rag_studio.list_deployments()
 
 # COMMAND ----------
 
+# MAGIC %md ### Inspect payload table:
 
+# COMMAND ----------
+
+import pyspark.sql.functions as F
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC use catalog development;
+# MAGIC use database rag_studio;
+
+# COMMAND ----------
+
+payload_table = spark.table('`rag_studio-rate_case_2_payload`')
+
+# COMMAND ----------
+
+display(payload_table.orderBy(F.desc('timestamp_ms')))

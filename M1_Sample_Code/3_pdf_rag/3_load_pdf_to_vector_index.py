@@ -79,7 +79,7 @@ if dbr_majorversion >= 14:
 
 # COMMAND ----------
 
-# DBTITLE 1,Databricks Vector Search Configuration
+# DBTITLE 1,Databricks Vector Search Configuration (1/4)
 # Get Vector Search Endpoints
 vector_search_endpoints_in_workspace = [item.name for item in w.vector_search_endpoints.list_endpoints() if item.endpoint_status.state == EndpointStatusState.ONLINE]
 if len(vector_search_endpoints_in_workspace) == 0:
@@ -96,12 +96,9 @@ dbutils.widgets.dropdown(
 # Set local variable for use later
 vector_search_endpoint_name = dbutils.widgets.get("vector_search_endpoint_name")
 
-# Validation
-if vector_search_endpoint_name == '' or vector_search_endpoint_name is None:
-    raise Exception("Please select a Vector Search endpoint to continue.")
-else:
-    print(f"Using `{vector_search_endpoint_name}` as the Vector Search endpoint.")
+# COMMAND ----------
 
+# DBTITLE 1,Databricks Vector Search Configuration (2/4)
 # Get UC Catalog names
 uc_catalogs = [row.catalog for row in spark.sql("SHOW CATALOGS").collect()]
 dbutils.widgets.dropdown(
@@ -136,6 +133,9 @@ else:
 
 uc_schema_name = dbutils.widgets.get("uc_schema_name")
 
+# COMMAND ----------
+
+# DBTITLE 1,Databricks Vector Search Configuration (3/4)
 # Get UC Volumes within the selected catalog/schema
 if uc_schema_name != "" and uc_schema_name is not None:
     spark.sql(f"USE CATALOG `{uc_catalog_name}`")
@@ -157,6 +157,16 @@ else:
     )
 
 source_uc_volume = f"/Volumes/{uc_catalog_name}/{uc_schema_name}/{dbutils.widgets.get('source_uc_volume')}"
+
+# COMMAND ----------
+
+# DBTITLE 1,Databricks Vector Search Configuration (4/4)
+# Validation
+if vector_search_endpoint_name == '' or vector_search_endpoint_name is None:
+    raise Exception("Please select a Vector Search endpoint to continue.")
+else:
+    print(f"Using `{vector_search_endpoint_name}` as the Vector Search endpoint.")
+
 
 # Validation
 if (uc_catalog_name == "" or uc_catalog_name is None) or (
@@ -183,18 +193,17 @@ else:
 
 # COMMAND ----------
 
-# DBTITLE 1,Data Processing Workflow Manager
 # Force this cell to re-run when these values are changed in the Notebook widgets
 uc_catalog_name = dbutils.widgets.get("uc_catalog_name")
-uc_schema_name = dbutils.widgets.get("uc_schema_name")
+uc_schema_name  = dbutils.widgets.get("uc_schema_name")
 volume_raw_name = dbutils.widgets.get("source_uc_volume")
 
 # Defaults
 BGE_CONTEXT_WINDOW_LENGTH_TOKENS = 512
-CHUNK_SIZE_TOKENS = 425
-CHUNK_OVERLAP_TOKENS = 75
-DATABRICKS_FMAPI_BGE_ENDPOINT = "databricks-bge-large-en"
-FMAPI_EMBEDDINGS_TASK = "llm/v1/embeddings"
+CHUNK_SIZE_TOKENS                = 425
+CHUNK_OVERLAP_TOKENS             = 75
+DATABRICKS_FMAPI_BGE_ENDPOINT    = "databricks-bge-large-en"
+FMAPI_EMBEDDINGS_TASK            = "llm/v1/embeddings"
 
 bronze_raw_files_table_name = (
     f"{uc_catalog_name}.{uc_schema_name}.bronze_{volume_raw_name}_raw"
@@ -214,6 +223,8 @@ print(f"Silver Delta Table w/ parsed files: `{silver_parsed_files_table_name}`")
 print(f"Gold Delta Table w/ chunked files: `{gold_chunks_table_name}`")
 print(f"Vector Search Index mirror of Gold Delta Table: `{gold_chunks_index_name}`")
 print("--")
+
+# COMMAND ----------
 
 dbutils.widgets.text(
     "embedding_endpoint_name",
@@ -242,16 +253,24 @@ if w.serving_endpoints.get(embedding_endpoint_name).task != FMAPI_EMBEDDINGS_TAS
 
 print(f"Embedding model endpoint: `{embedding_endpoint_name}`")
 print("--")
+
+# COMMAND ----------
+
 dbutils.widgets.text(
     "chunk_size_tokens", str(CHUNK_SIZE_TOKENS), label="Parameter: chunk size"
 )
 chunk_size_tokens = int(dbutils.widgets.get("chunk_size_tokens"))
+
+# COMMAND ----------
 
 dbutils.widgets.text(
     "chunk_overlap_tokens", str(CHUNK_OVERLAP_TOKENS), label="Parameter: chunk overlap"
 )
 chunk_overlap_tokens = int(dbutils.widgets.get("chunk_overlap_tokens"))
 
+# COMMAND ----------
+
+# DBTITLE 1,Data Processing Workflow Manager
 if (
     embedding_endpoint_name == DATABRICKS_FMAPI_BGE_ENDPOINT
     and (chunk_size_tokens + chunk_overlap_tokens) > BGE_CONTEXT_WINDOW_LENGTH_TOKENS
@@ -367,9 +386,14 @@ else:
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC Size limitations, malicious content in PDFs
+
+# COMMAND ----------
+
 # DBTITLE 1,Recursive PDF Ingestion Workflow
 LOADER_DEFAULT_DOC_URI_COL_NAME = "path"
-DOC_URI_COL_NAME = "doc_uri"
+DOC_URI_COL_NAME                = "doc_uri"
 
 bronze_df = (
     spark.read.format("binaryFile")
@@ -417,16 +441,16 @@ if bronze_df.count() == 0:
 )
 def parse_pdf(pdf_raw_bytes):
     try:
-        pdf = io.BytesIO(pdf_raw_bytes)
-        reader = PdfReader(pdf)
+        pdf         = io.BytesIO(pdf_raw_bytes)
+        reader      = PdfReader(pdf)
         output_text = ""
         for _, page_content in enumerate(reader.pages):
             output_text += page_content.extract_text() + "\n\n"
 
         return {
             "number_pages": len(reader.pages),
-            "text": output_text,
-            "status": "SUCCESS",
+            "text":         output_text,
+            "status":       "SUCCESS",
         }
     except Exception as e:
         return {"number_pages": None, "text": None, "status": f"ERROR: {e}"}
@@ -481,7 +505,7 @@ print(f"Number of tokens in `{chunk_example_text}`: {len(encoded_input['input_id
 # COMMAND ----------
 
 # DBTITLE 1,Text Chunking UDF Writer
-CHUNK_COLUMN_NAME = "chunked_text"
+CHUNK_COLUMN_NAME    = "chunked_text"
 CHUNK_ID_COLUMN_NAME = "chunk_id"
 
 # If using runtime < 14.3, remove `useArrow=True`
@@ -525,10 +549,10 @@ try:
 # Otherwise, create new index
 except ResourceDoesNotExist as ne_error:
     w.vector_search_indexes.create_index(
-        name=gold_chunks_index_name,
-        endpoint_name=vector_search_endpoint_name,
-        primary_key=CHUNK_ID_COLUMN_NAME,
-        index_type=VectorIndexType.DELTA_SYNC,
+        name          = gold_chunks_index_name,
+        endpoint_name = vector_search_endpoint_name,
+        primary_key   = CHUNK_ID_COLUMN_NAME,
+        index_type    = VectorIndexType.DELTA_SYNC,
         delta_sync_index_spec=DeltaSyncVectorIndexSpecRequest(
             embedding_source_columns=[
                 EmbeddingSourceColumn(

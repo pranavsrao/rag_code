@@ -6,6 +6,7 @@
 # DBTITLE 1,Fetch Secrets
 rag_studio        = dbutils.secrets.get("kv-llmops-framework", "rag-studio-wheel-link")
 rag_eval          = dbutils.secrets.get("kv-llmops-framework", "rag-eval-wheel-link")
+
 mlflow_whl        = dbutils.secrets.get("kv-llmops-framework", "mlflow-wheel")
 mlflow_skinny_whl = dbutils.secrets.get("kv-llmops-framework", "mlflow-skinny-wheel")
 

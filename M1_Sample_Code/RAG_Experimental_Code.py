@@ -1,6 +1,6 @@
 # Databricks notebook source
 # DBTITLE 1,Databricks RAG Evaluation Installer
-# MAGIC %run ./wheel_installer
+# %run ./wheel_installer
 
 # COMMAND ----------
 

@@ -1,4 +1,9 @@
 # Databricks notebook source
+# MAGIC %md
+# MAGIC ### Setup
+
+# COMMAND ----------
+
 # DBTITLE 1,Databricks Rag Studio Installer
 # MAGIC %run ../wheel_installer
 
@@ -8,30 +13,40 @@
 
 # COMMAND ----------
 
-
-
-# COMMAND ----------
-
 # Before logging this chain using the driver notebook, you need to comment out this line.
-# dbutils.library.restartPython() 
+# dbutils.library.restartPython()
 
 # COMMAND ----------
 
 # DBTITLE 1,Import packages
 from operator import itemgetter
 
-from databricks import rag
-from databricks.vector_search.client import VectorSearchClient
-from langchain.schema.runnable import RunnableLambda
-from langchain_community.chat_models import ChatDatabricks
+from databricks                       import rag
+from databricks.vector_search.client  import VectorSearchClient
+
+from langchain.schema.runnable        import RunnableLambda
+from langchain_community.chat_models  import ChatDatabricks
 from langchain_community.vectorstores import DatabricksVectorSearch
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import PromptTemplate
-from langchain_core.runnables import RunnablePassthrough
+from langchain_core.output_parsers    import StrOutputParser
+from langchain_core.prompts           import PromptTemplate
+from langchain_core.runnables         import RunnablePassthrough
 
 # COMMAND ----------
 
-# DBTITLE 1,Multistage Chat Joke Generator
+# MAGIC %md
+# MAGIC ### Define RAG Chain
+
+# COMMAND ----------
+
+# DBTITLE 1,Get Config from YAML
+############
+# Get the configuration YAML
+############
+rag_config = rag.RagConfig("3_rag_chain_config.yaml")
+
+# COMMAND ----------
+
+# DBTITLE 1,Helper Functions
 ############
 # RAG Studio requires your chain to accept an array of OpenAI-formatted messages as a `messages` parameter. Schema: https://docs.databricks.com/en/machine-learning/foundation-models/api-reference.html#chatmessage
 # These helper functions help parse the `messages` array
@@ -45,48 +60,6 @@ def extract_user_query_string(chat_messages_array):
 def extract_chat_history(chat_messages_array):
     return chat_messages_array[:-1]
 
-
-############
-# Get the configuration YAML
-############
-rag_config = rag.RagConfig("3_rag_chain_config.yaml")
-
-
-############
-# Connect to the Vector Search Index
-############
-vs_client = VectorSearchClient(disable_notice=True)
-vs_index = vs_client.get_index(
-    endpoint_name=rag_config.get("vector_search_endpoint_name"),
-    index_name=rag_config.get("vector_search_index"),
-)
-vector_search_schema = rag_config.get("vector_search_schema")
-
-############
-# Turn the Vector Search index into a LangChain retriever
-############
-vector_search_as_retriever = DatabricksVectorSearch(
-    vs_index,
-    text_column=vector_search_schema.get("chunk_text"),
-    columns=[
-        vector_search_schema.get("primary_key"),
-        vector_search_schema.get("chunk_text"),
-        vector_search_schema.get("document_source"),
-    ],
-).as_retriever(search_kwargs=rag_config.get("vector_search_parameters"))
-
-############
-# Required to:
-# 1. Enable the RAG Studio Review App to properly display retrieved chunks
-# 2. Enable evaluation suite to measure the retriever
-############
-rag.set_vector_search_schema(
-    primary_key=vector_search_schema.get("primary_key"),
-    text_column=vector_search_schema.get("chunk_text"),
-    doc_uri=vector_search_schema.get(
-        "document_source"
-    ),  # Review App uses `doc_uri` to display chunks from the same document in a single view
-)
 
 ############
 # Method to format the docs returned by the retriever into the prompt
@@ -105,6 +78,39 @@ prompt = PromptTemplate(
     input_variables=rag_config.get("chat_prompt_template_variables"),
 )
 
+# COMMAND ----------
+
+# DBTITLE 1,Connect to Vector Search Index
+############
+# Connect to the Vector Search Index
+############
+vs_client = VectorSearchClient(disable_notice=True)
+vs_index = vs_client.get_index(
+    endpoint_name=rag_config.get("vector_search_endpoint_name"),
+    index_name=rag_config.get("vector_search_index"),
+)
+vector_search_schema = rag_config.get("vector_search_schema")
+
+# COMMAND ----------
+
+# DBTITLE 1,Wrap Vector Search Index with Langchain Retriever
+############
+# Turn the Vector Search index into a LangChain retriever
+############
+vector_search_as_retriever = DatabricksVectorSearch(
+    vs_index,
+    text_column=vector_search_schema.get("chunk_text"),
+    columns=[
+        vector_search_schema.get("primary_key"),
+        vector_search_schema.get("chunk_text"),
+        vector_search_schema.get("document_source"),
+    ],
+).as_retriever(search_kwargs=rag_config.get("vector_search_parameters"))
+
+
+# COMMAND ----------
+
+# DBTITLE 1,Define RAG Chain (Helper Functions)
 ############
 # FM for generation
 ############
@@ -129,6 +135,9 @@ chain = (
     | StrOutputParser()
 )
 
+# COMMAND ----------
+
+# DBTITLE 1,Test our RAG Chain
 ############
 # Test the Chain
 ############
@@ -142,6 +151,9 @@ chain = (
 # }
 # print(chain.invoke(model_input_sample))
 
+# COMMAND ----------
+
+# DBTITLE 1,Configure RAG Studio for logging our RAG Chain
 ############
 # Tell RAG Studio about the chain - required for logging, but not local testing of this chain
 ############
@@ -149,7 +161,23 @@ rag.set_chain(chain)
 
 # COMMAND ----------
 
-help(StrOutputParser)
+# MAGIC %md
+# MAGIC ### Configure RAG Studio to use our Vector Search Index in the Review App
+
+# COMMAND ----------
+
+############
+# Required to:
+# 1. Enable the RAG Studio Review App to properly display retrieved chunks
+# 2. Enable evaluation suite to measure the retriever
+############
+rag.set_vector_search_schema(
+    primary_key=vector_search_schema.get("primary_key"),
+    text_column=vector_search_schema.get("chunk_text"),
+    doc_uri=vector_search_schema.get(
+        "document_source"
+    ),  # Review App uses `doc_uri` to display chunks from the same document in a single view
+)
 
 # COMMAND ----------
 
@@ -174,7 +202,6 @@ help(StrOutputParser)
 # COMMAND ----------
 
 # DBTITLE 1,Escaped JSON Display Generator
-
 # import json
 # import html
 
@@ -191,15 +218,3 @@ help(StrOutputParser)
 # # To use the HTML string in a context that renders HTML, 
 # # such as a web application or a notebook cell that supports HTML output
 # displayHTML(pretty_json_html)
-
-# COMMAND ----------
-
-# Import the necessary libraries
-import pandas as pd
-from unity.catalog import development
-
-# Import the rate_case_eval_set_eval_metrics from unity catalog
-rate_case_eval_set_eval_metrics = development.rag_studio.rate_case_eval_set_eval_metrics
-
-# Convert rate_case_eval_set_eval_metrics into a pandas dataframe
-df = pd.DataFrame.from_records(rate_case_eval_set_eval_metrics)
