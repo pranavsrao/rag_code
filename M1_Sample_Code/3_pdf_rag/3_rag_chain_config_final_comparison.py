@@ -316,13 +316,12 @@ custom_judge_evaluation_results = rag_eval.evaluate(eval_set_table_name=eval_tab
 # COMMAND ----------
 
 eval_dataset_assessments = spark.table('development.rag_studio.eval_dataset_test_assessments')
-
 display(eval_dataset_assessments)
 
 # COMMAND ----------
 
 factual_accuracy_scores = spark.table('grc_benchmark').\
-                      select('request_id', 'factual_accuracy', 'POC')
+                            select('request_id', 'factual_accuracy', 'POC')
 
 display(factual_accuracy_scores)
 
