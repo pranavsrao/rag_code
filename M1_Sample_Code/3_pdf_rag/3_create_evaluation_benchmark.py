@@ -1,9 +1,5 @@
 # Databricks notebook source
 # MAGIC %md
-
-# COMMAND ----------
-
-# MAGIC %md
 # MAGIC ### Create an evaluation benchmark with the following columns `request_id`, `request`, `expected_response` based on the SCE spreadsheet provided to us. 
 
 # COMMAND ----------

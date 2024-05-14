@@ -16,20 +16,6 @@
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Install Dependencies
-
-# COMMAND ----------
-
-# DBTITLE 1,Databricks RAG Studio Installer
-# MAGIC %run ../wheel_installer
-
-# COMMAND ----------
-
-dbutils.library.restartPython()
-
-# COMMAND ----------
-
-# MAGIC %md
 # MAGIC ### Establish notebook parameters
 
 # COMMAND ----------
@@ -45,15 +31,22 @@ dbutils.widgets.text("evaluation_benchmark_table_name", "", label="Evaluation Be
 
 import json
 import os
+import html
+import yaml
 
 import mlflow
+import pyspark.sql.functions as F
 from databricks import rag, rag_eval, rag_studio
-
-import html
 
 # COMMAND ----------
 
 mlflow.set_registry_uri('databricks-uc')
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC use catalog development;
+# MAGIC use schema rag_studio;
 
 # COMMAND ----------
 
@@ -149,22 +142,19 @@ print(config_yml)
 rag_chain_notebook_path = "3_rag_dummy_chain"
 rag_chain_config_yaml   = "3_rag_chain_dummy_config.yaml"
 
-model_uri = dbutils.notebook.run("./3_rag_chain_driver_small_notebook", 600,
+dummy_model_uri = dbutils.notebook.run("./3_rag_chain_driver_small_notebook", 600,
                                  arguments={"rag_chain_notebook_path":rag_chain_notebook_path,
-                                  "rag_chain_config_yaml":  rag_chain_config_yaml})
+                                            "rag_chain_config_yaml":  rag_chain_config_yaml})
 
 # COMMAND ----------
-
-model_uri = 'runs:/3151ff0d68c342d091f576725765f911/chain'
-# @todo: This is a workaround.
 
 ############
 # Run evaluation, logging the results to a sub-run of the chain's MLflow run
 ############
 with mlflow.start_run():
-  evaluation_results = rag_eval.evaluate(eval_set_table_name = evaluation_benchmark_fqdn,
-                                         model_uri           = model_uri, 
-                                         config              = config_yml)
+  evaluation_results_pre_poc = rag_eval.evaluate(eval_set_table_name = evaluation_benchmark_fqdn,
+                                                 model_uri           = dummy_model_uri,
+                                                 config              = config_yml)
 # @todo: How to add app_version when using model_uri?
 
 ############
@@ -172,9 +162,9 @@ with mlflow.start_run():
 # Known issues: Can only be run once per run_id.
 # ⚠️⚠️ 🐛🐛 Experimental features likely have bugs! 🐛🐛 ⚠️⚠️
 ############
-experimental_add_metrics_to_run(evaluation_results, evaluation_results.mlflow_run_id)
-experimental_add_eval_outputs_to_run(evaluation_results, evaluation_results.mlflow_run_id)
-experimental_add_eval_config_tags_to_run(evaluation_results, config_yml, evaluation_results.mlflow_run_id)
+experimental_add_metrics_to_run(evaluation_results_pre_poc, evaluation_results_pre_poc.mlflow_run_id)
+experimental_add_eval_outputs_to_run(evaluation_results_pre_poc, evaluation_results_pre_poc.mlflow_run_id)
+experimental_add_eval_config_tags_to_run(evaluation_results_pre_poc, config_yml, evaluation_results_pre_poc.mlflow_run_id)
 
 # Note: If you change the config after you log the model, but before you run this command, the incorrect config will be logged.
 # RagConfig(chain_config_path).experimental_log_to_mlflow_run(run_id=evaluation_results.mlflow_run_id)
@@ -191,16 +181,13 @@ model_uri = dbutils.notebook.run("./3_rag_chain_driver_small_notebook", 600,
 
 # COMMAND ----------
 
-# model_uri = f'runs:/{run_id}/chain'
-# @todo: This is a workaround.
-
 ############
 # Run evaluation, logging the results to a sub-run of the chain's MLflow run
 ############
 with mlflow.start_run():
-  evaluation_results = rag_eval.evaluate(eval_set_table_name = evaluation_benchmark_fqdn,
-                                         model_uri           = model_uri, 
-                                         config              = config_yml)
+  evaluation_results_post_poc = rag_eval.evaluate(eval_set_table_name = evaluation_benchmark_fqdn,
+                                                  model_uri           = model_uri,
+                                                  config              = config_yml)
 # @todo: How to add app_version when using model_uri?
 
 ############
@@ -208,9 +195,9 @@ with mlflow.start_run():
 # Known issues: Can only be run once per run_id.
 # ⚠️⚠️ 🐛🐛 Experimental features likely have bugs! 🐛🐛 ⚠️⚠️
 ############
-experimental_add_metrics_to_run(evaluation_results, evaluation_results.mlflow_run_id)
-experimental_add_eval_outputs_to_run(evaluation_results, evaluation_results.mlflow_run_id)
-experimental_add_eval_config_tags_to_run(evaluation_results, config_yml, evaluation_results.mlflow_run_id)
+experimental_add_metrics_to_run(evaluation_results_post_poc, evaluation_results_post_poc.mlflow_run_id)
+experimental_add_eval_outputs_to_run(evaluation_results_post_poc, evaluation_results_post_poc.mlflow_run_id)
+experimental_add_eval_config_tags_to_run(evaluation_results_post_poc, config_yml, evaluation_results_post_poc.mlflow_run_id)
 
 # Note: If you change the config after you log the model, but before you run this command, the incorrect config will be logged.
 # RagConfig(chain_config_path).experimental_log_to_mlflow_run(run_id=evaluation_results.mlflow_run_id)
@@ -218,7 +205,52 @@ experimental_add_eval_config_tags_to_run(evaluation_results, config_yml, evaluat
 # COMMAND ----------
 
 # DBTITLE 1,Report differences in metrics
-# @todo
+pre_poc_model_uri   = dummy_model_uri
+post_poc_model_uri  = model_uri
+
+pre_poc_assessments = spark.table(evaluation_results_pre_poc.assessments_table_name).filter(F.col('app_version') == dummy_model_uri)
+pre_poc_metrics     = spark.table(evaluation_results_pre_poc.eval_metrics_table_name).filter(F.col('app_version') == dummy_model_uri)
+pre_poc_table       = pre_poc_metrics.join(pre_poc_assessments, ['request_id', 'app_version'])
+
+post_poc_assessments = spark.table(evaluation_results_post_poc.assessments_table_name).filter(F.col('app_version') == model_uri)
+post_poc_metrics     = spark.table(evaluation_results_post_poc.eval_metrics_table_name).filter(F.col('app_version') == model_uri)
+post_poc_table       = post_poc_metrics.join(post_poc_assessments, ['request_id', 'app_version'])
+
+# @note: This reads the assessments and metrics tables and filters down to just the required rows.
+
+# COMMAND ----------
+
+display(pre_poc_table.orderBy('request_id').limit(1))
+display(post_poc_table.orderBy('request_id').limit(1))
+
+# COMMAND ----------
+
+pre_poc_table_unpack = pre_poc_table.\
+                        withColumn('llm_factual_accuracy_score',  F.col('response_assessment').ratings.answer_good.double_value).\
+                        withColumn('llm_factual_accuracy_reason', F.col('response_assessment').ratings.answer_good.rationale).\
+                        select('request_id', 'request', 'expected_response', 'response', 
+                               'llm_factual_accuracy_score', 'llm_factual_accuracy_reason',
+                               F.lit('pre-POC').alias('state'))
+
+display(pre_poc_table_unpack)
+# @note: Unpack assessments in pre_poc table.
+
+# COMMAND ----------
+
+post_poc_table_unpack = post_poc_table.\
+                        withColumn('llm_factual_accuracy_score',  F.col('response_assessment').ratings.answer_good.double_value).\
+                        withColumn('llm_factual_accuracy_reason', F.col('response_assessment').ratings.answer_good.rationale).\
+                        select('request_id', 'request', 'expected_response', 'response', 
+                               'llm_factual_accuracy_score', 'llm_factual_accuracy_reason',
+                               F.lit('post-POC').alias('state'))
+
+display(post_poc_table_unpack)
+# @note: Unpack assessments in pre_poc table.
+
+# COMMAND ----------
+
+factual_accuracy_table = pre_poc_table_unpack.union(post_poc_table_unpack.select(*pre_poc_table_unpack.columns))
+display(factual_accuracy_table.groupBy('state').agg( (F.avg('llm_factual_accuracy_score')/5).alias('factual_accuracy_grade') ) )
 
 # COMMAND ----------
 
@@ -227,21 +259,15 @@ experimental_add_eval_config_tags_to_run(evaluation_results, config_yml, evaluat
 
 # COMMAND ----------
 
-model_uri = dbutils.notebook.run("./3_rag_chain_driver_small_notebook", 600,
-                                 arguments={"rag_chain_notebook_path":rag_chain_notebook_path,
-                                            "rag_chain_config_yaml":rag_chain_config_yaml})
-
-# COMMAND ----------
-
 # DBTITLE 1,Evaluate dummy chain (simulating pre-POC)
 rag_chain_notebook_path = "3_rag_dummy_chain"
 rag_chain_config_yaml   = "3_rag_chain_dummy_config.yaml"
 
 answer_sheet_table_name = dbutils.notebook.run("./3_create_answer_sheet", 1200,
-                                 arguments={"evaluation_benchmark_fqdn":evaluation_benchmark_fqdn,
-                                            "rag_chain_notebook_path":rag_chain_notebook_path,
-                                            "rag_chain_config_yaml":rag_chain_config_yaml,
-                                            "app_version":"dummy_chain"})
+                                               arguments= {"evaluation_benchmark_fqdn":evaluation_benchmark_fqdn,
+                                                          "rag_chain_notebook_path":rag_chain_notebook_path,
+                                                          "rag_chain_config_yaml":rag_chain_config_yaml,
+                                                          "app_version":"pre_poc_chain"})
 
 # COMMAND ----------
 
@@ -249,9 +275,9 @@ answer_sheet_table_name = dbutils.notebook.run("./3_create_answer_sheet", 1200,
 # Run evaluation, logging the results to a sub-run of the chain's MLflow run
 ############
 with mlflow.start_run():
-  evaluation_results = rag_eval.evaluate(eval_set_table_name     = evaluation_benchmark_fqdn,
-                                         answer_sheet_table_name = answer_sheet_table_name, 
-                                         config                  = config_yml)
+  evaluation_results_pre_poc = rag_eval.evaluate(eval_set_table_name     = evaluation_benchmark_fqdn,
+                                                 answer_sheet_table_name = answer_sheet_table_name,
+                                                 config                  = config_yml)
 # @todo: How to add app_version when using model_uri?
 
 ############
@@ -259,9 +285,9 @@ with mlflow.start_run():
 # Known issues: Can only be run once per run_id.
 # ⚠️⚠️ 🐛🐛 Experimental features likely have bugs! 🐛🐛 ⚠️⚠️
 ############
-experimental_add_metrics_to_run(evaluation_results, evaluation_results.mlflow_run_id)
-experimental_add_eval_outputs_to_run(evaluation_results, evaluation_results.mlflow_run_id)
-experimental_add_eval_config_tags_to_run(evaluation_results, config_yml, evaluation_results.mlflow_run_id)
+experimental_add_metrics_to_run(evaluation_results_pre_poc, evaluation_results_pre_poc.mlflow_run_id)
+experimental_add_eval_outputs_to_run(evaluation_results_pre_poc, evaluation_results_pre_poc.mlflow_run_id)
+experimental_add_eval_config_tags_to_run(evaluation_results_pre_poc, config_yml, evaluation_results_pre_poc.mlflow_run_id)
 
 # Note: If you change the config after you log the model, but before you run this command, the incorrect config will be logged.
 # RagConfig(chain_config_path).experimental_log_to_mlflow_run(run_id=evaluation_results.mlflow_run_id)
@@ -273,10 +299,10 @@ rag_chain_notebook_path = "3_rag_chain"
 rag_chain_config_yaml   = "3_rag_chain_config.yaml"
 
 answer_sheet_table_name = dbutils.notebook.run("./3_create_answer_sheet", 1200,
-                                 arguments={"evaluation_benchmark_fqdn":evaluation_benchmark_fqdn,
-                                            "rag_chain_notebook_path":rag_chain_notebook_path,
-                                            "rag_chain_config_yaml":rag_chain_config_yaml,
-                                            "app_version":"dummy_chain"})
+                                               arguments={"evaluation_benchmark_fqdn":evaluation_benchmark_fqdn,
+                                                          "rag_chain_notebook_path":rag_chain_notebook_path,
+                                                          "rag_chain_config_yaml":rag_chain_config_yaml,
+                                                          "app_version":"post_poc_chain"})
 
 # COMMAND ----------
 
@@ -284,9 +310,9 @@ answer_sheet_table_name = dbutils.notebook.run("./3_create_answer_sheet", 1200,
 # Run evaluation, logging the results to a sub-run of the chain's MLflow run
 ############
 with mlflow.start_run():
-  evaluation_results = rag_eval.evaluate(eval_set_table_name     = evaluation_benchmark_fqdn,
-                                         answer_sheet_table_name = answer_sheet_table_name, 
-                                         config                  = config_yml)
+  evaluation_results_post_poc = rag_eval.evaluate(eval_set_table_name     = evaluation_benchmark_fqdn,
+                                                  answer_sheet_table_name = answer_sheet_table_name,
+                                                  config                  = config_yml)
 # @todo: How to add app_version when using model_uri?
 
 ############
@@ -294,9 +320,9 @@ with mlflow.start_run():
 # Known issues: Can only be run once per run_id.
 # ⚠️⚠️ 🐛🐛 Experimental features likely have bugs! 🐛🐛 ⚠️⚠️
 ############
-experimental_add_metrics_to_run(evaluation_results, evaluation_results.mlflow_run_id)
-experimental_add_eval_outputs_to_run(evaluation_results, evaluation_results.mlflow_run_id)
-experimental_add_eval_config_tags_to_run(evaluation_results, config_yml, evaluation_results.mlflow_run_id)
+experimental_add_metrics_to_run(evaluation_results_post_poc, evaluation_results_post_poc.mlflow_run_id)
+experimental_add_eval_outputs_to_run(evaluation_results_post_poc, evaluation_results_post_poc.mlflow_run_id)
+experimental_add_eval_config_tags_to_run(evaluation_results_post_poc, config_yml, evaluation_results_post_poc.mlflow_run_id)
 
 # Note: If you change the config after you log the model, but before you run this command, the incorrect config will be logged.
 # RagConfig(chain_config_path).experimental_log_to_mlflow_run(run_id=evaluation_results.mlflow_run_id)
@@ -304,4 +330,48 @@ experimental_add_eval_config_tags_to_run(evaluation_results, config_yml, evaluat
 # COMMAND ----------
 
 # DBTITLE 1,Report differences in metrics
-# @todo
+pre_poc_app_version  = "pre_poc_chain"
+post_poc_app_version = "post_poc_chain"
+
+pre_poc_assessments = spark.table(evaluation_results_pre_poc.assessments_table_name).filter(F.col('app_version') == pre_poc_app_version)
+pre_poc_metrics     = spark.table(evaluation_results_pre_poc.eval_metrics_table_name).filter(F.col('app_version') == pre_poc_app_version)
+pre_poc_table       = pre_poc_metrics.join(pre_poc_assessments, ['request_id', 'app_version'])
+
+post_poc_assessments = spark.table(evaluation_results_post_poc.assessments_table_name).filter(F.col('app_version') == post_poc_app_version)
+post_poc_metrics     = spark.table(evaluation_results_post_poc.eval_metrics_table_name).filter(F.col('app_version') == post_poc_app_version)
+post_poc_table       = post_poc_metrics.join(post_poc_assessments, ['request_id', 'app_version'])
+# @note: This reads the assessments and metrics tables and filters down to just the required rows.
+
+# COMMAND ----------
+
+display(pre_poc_table.orderBy('request_id').limit(1))
+display(post_poc_table.orderBy('request_id').limit(1))
+
+# COMMAND ----------
+
+pre_poc_table_unpack = pre_poc_table.\
+                        withColumn('llm_factual_accuracy_score',  F.col('response_assessment').ratings.answer_good.double_value).\
+                        withColumn('llm_factual_accuracy_reason', F.col('response_assessment').ratings.answer_good.rationale).\
+                        select('request_id', 'request', 'expected_response', 'response', 
+                               'llm_factual_accuracy_score', 'llm_factual_accuracy_reason',
+                               F.lit('pre-POC').alias('state'))
+
+display(pre_poc_table_unpack)
+# @note: Unpack assessments in pre_poc table.
+
+# COMMAND ----------
+
+post_poc_table_unpack = post_poc_table.\
+                        withColumn('llm_factual_accuracy_score',  F.col('response_assessment').ratings.answer_good.double_value).\
+                        withColumn('llm_factual_accuracy_reason', F.col('response_assessment').ratings.answer_good.rationale).\
+                        select('request_id', 'request', 'expected_response', 'response', 
+                               'llm_factual_accuracy_score', 'llm_factual_accuracy_reason',
+                               F.lit('post-POC').alias('state'))
+
+display(post_poc_table_unpack)
+# @note: Unpack assessments in pre_poc table.
+
+# COMMAND ----------
+
+factual_accuracy_table = pre_poc_table_unpack.union(post_poc_table_unpack.select(*pre_poc_table_unpack.columns))
+display(factual_accuracy_table.groupBy('state').agg( (F.avg('llm_factual_accuracy_score')/5).alias('factual_accuracy_grade') ) )

@@ -20,9 +20,9 @@ from typing import Optional, Tuple
 # COMMAND ----------
 
 # DBTITLE 1,Configure table names
-uc_catalog = 'catalog'
-uc_schema = 'schema'
-model_name = 'pdf_bot'
+uc_catalog = 'development'
+uc_schema  = 'rag_studio'
+model_name = 'rate_case_2'
 
 ############
 # UC FQN to the Inference Table

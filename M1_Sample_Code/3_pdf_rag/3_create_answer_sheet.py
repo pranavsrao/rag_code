@@ -14,15 +14,6 @@
 
 # COMMAND ----------
 
-# DBTITLE 1,Install dependencies
-# MAGIC %run ../wheel_installer
-
-# COMMAND ----------
-
-dbutils.library.restartPython()
-
-# COMMAND ----------
-
 # DBTITLE 1,Establish notebook parameters
 dbutils.widgets.text("evaluation_benchmark_fqdn", "", label="Evaluation Benchmark UC FQDN")
 dbutils.widgets.text("rag_chain_notebook_path",   "", label="RAG Chain Notebook Path")
@@ -38,6 +29,10 @@ import mlflow
 
 import pandas as pd
 from pyspark.sql.functions import pandas_udf
+
+# COMMAND ----------
+
+mlflow.set_registry_uri('databricks-uc')
 
 # COMMAND ----------
 
@@ -103,8 +98,6 @@ def query_RAG_chain_builder(model_uri):
 # query_RAG_chain = pandas_udf(qrc, StringType())
 
 # COMMAND ----------
-
-model_uri       = 'runs:/3151ff0d68c342d091f576725765f911/chain'
 
 eval_test = evaluation_benchmark_table.toPandas()
 qrc_test  = query_RAG_chain_builder(model_uri)

@@ -14,25 +14,6 @@
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Install dependencies
-
-# COMMAND ----------
-
-# DBTITLE 1,Databricks RAG Studio Installer
-# MAGIC %run ../wheel_installer
-
-# COMMAND ----------
-
-# MAGIC %pip install spacy
-# MAGIC %pip install textstat
-
-# COMMAND ----------
-
-dbutils.library.restartPython() 
-
-# COMMAND ----------
-
-# MAGIC %md
 # MAGIC ### Establish notebook parameters
 
 # COMMAND ----------

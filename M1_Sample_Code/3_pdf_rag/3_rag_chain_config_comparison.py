@@ -53,20 +53,6 @@
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Install dependencies
-
-# COMMAND ----------
-
-# DBTITLE 1,Databricks RAG Studio Installer
-# MAGIC %run ../wheel_installer
-
-# COMMAND ----------
-
-dbutils.library.restartPython()
-
-# COMMAND ----------
-
-# MAGIC %md
 # MAGIC #### Imports and configuration:
 
 # COMMAND ----------
@@ -248,7 +234,6 @@ evaluation_results = rag_eval.evaluate(eval_set_table_name     = eval_table_fqdn
 
 # COMMAND ----------
 
-
 response_table_name = 'gold_config_test_responses_few_shot'
 response_table_fqdn = f"{uc_catalog}.{uc_schema}.{response_table_name}"
 
@@ -334,6 +319,11 @@ display(factual_accuracy_scores)
 comparison_table = eval_dataset_assessments.join(factual_accuracy_scores, on=["request_id"])
 
 display(comparison_table)
+
+# COMMAND ----------
+
+display(comparison_table.\
+            withColumn('score_difference', F.col('answer_good_score') - F.col('human_score')))
 
 # COMMAND ----------
 
